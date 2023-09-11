@@ -1,0 +1,20 @@
+{
+  "name": "scribble-wall",
+  "version": "1.0.0",
+  "description": "A collaborative virtual wall for scribbling and doodling.",
+  "scripts": {
+    "start": "concurrently \"node backend/server.js\" \"npm run start --prefix frontend\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "scribble",
+    "doodle",
+    "virtual-wall",
+    "collaborative"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.1"
+  }
+}
