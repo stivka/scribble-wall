@@ -1,43 +1,69 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const WebSocket = require('ws');
 const cors = require('cors');
+const ShareDB = require('sharedb');
+const ShareDBMongo = require('sharedb-mongo');
 
 const app = express();
 app.use(cors());
+
 const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: {
-        origin: "http://localhost:3000",
-        methods: ["GET", "POST"],
-        allowedHeaders: ["my-custom-header"],
-        credentials: true
-    }
+
+// Create a single ShareDB instance that will handle multiple client connections
+const backend = new ShareDB({
+    // lets use the ShareDBMongo database adapter
+    // provide "mongodb" as the scheme for the connection string URI
+  db: ShareDBMongo('mongodb://localhost:27017/drawingDB')
 });
 
-// Store drawing history
-let drawingHistory = [];
+// Create a WebSocket server and bind it to the Express HTTP server.
+const wss = new WebSocket.Server({ server });
 
-io.on('connection', (socket) => {
+wss.on('connection', (ws) => {
     console.log('New client connected');
-    
-    // Send existing drawing history to the newly connected client
-    socket.emit('drawingHistory', drawingHistory);
 
-    socket.on('draw', (data) => {
-        // Add the new drawing data to the history
-        drawingHistory.push(data);
+    // Create a ShareDB connection for this WebSocket connection.
+    const shareDBConnection = backend.connect();
 
-        // Broadcast the drawing data to other clients
-        socket.broadcast.emit('draw', data);
+    // Fetch or create our shared document.
+    const doc = shareDBConnection.get('canvas', 'sharedCanvas');
+
+    doc.fetch((err) => {
+        if (err) throw err;
+
+        if (doc.type === null) {
+            doc.create({ operations: [] }, (createErr) => {
+                if (createErr) throw createErr;
+
+                // Send the current state to the connected client.
+                ws.send(JSON.stringify({ type: 'drawingHistory', data: doc.data.operations }));
+            });
+        } else {
+            // If the document already exists, send its current state to the connected client.
+            ws.send(JSON.stringify({ type: 'drawingHistory', data: doc.data.operations }));
+        }
     });
 
-    // Handle request for drawing history (optional if you're emitting history right after connection)
-    socket.on('getDrawingHistory', () => {
-        socket.emit('drawingHistory', drawingHistory);
+    ws.on('message', (message) => {
+        const { type, data } = JSON.parse(message);
+
+        if (type === 'draw') {
+            // Update the shared document with the new drawing operation.
+            doc.submitOp([{ p: ['operations', doc.data.operations.length], li: data }]);
+
+            // Broadcast the drawing data to other clients.
+            wss.clients.forEach((client) => {
+                if (client !== ws && client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({ type: 'draw', data }));
+                }
+            });
+        } else if (type === 'getDrawingHistory') {
+            ws.send(JSON.stringify({ type: 'drawingHistory', data: doc.data.operations }));
+        }
     });
 
-    socket.on('disconnect', () => {
+    ws.on('close', () => {
         console.log('Client disconnected');
     });
 });

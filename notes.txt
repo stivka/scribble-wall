@@ -1,0 +1,21 @@
+Try sending canvas changes on every mouse action and certain time interval.
+With this approach there is not need to reconstruct the drawing paths,
+which is problematic and may results in different results in the session
+where the input is given and sessions where it is recieved.
+
+The core question is, that what is the time interval after which 
+data is updated?
+
+Differential, high-frequency updates
+
+Probably need to use Operational Transformation (OT)
+Consider using ShareDB which is specifically designed for OT https://github.com/share/sharedb
+
+To not run out of bandwidth consider: 
+* user cap
+* close idle websocket sessions with timeout
+* a toggle for drawing mode to open websocket session with those clients,
+whereas others are viewers
+
+One cop-out is going with locking areas and not allowing more than one editor 
+in that area at once.

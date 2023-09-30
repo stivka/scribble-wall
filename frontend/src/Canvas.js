@@ -1,11 +1,13 @@
 import React, { useRef, useEffect } from 'react';
 import io from 'socket.io-client';
 import concreteWall from './images/concrete-wall.jpg';
+import ShareDB from 'sharedb/lib/client';
 
 const Canvas = () => {
     const canvasRef = useRef(null);
-    const ctxRef = useRef(null); // Use useRef for the context
+    const ctxRef = useRef(null);
     const socket = io.connect('http://localhost:3001');
+    let doc = null;
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -17,13 +19,18 @@ const Canvas = () => {
             ctxRef.current.drawImage(background, 0, 0);
         }
 
-        socket.on('draw', (data) => {
-            drawOnCanvas(data, ctxRef.current);
+        // Initialize ShareDB's connection
+        const connection = new ShareDB.Connection(socket);
+        doc = connection.get('drawings', 'canvas'); // 'drawings' is the collection and 'canvas' is the document id
+
+        // When the document's data updates, redraw the canvas
+        doc.subscribe((err) => {
+            if (err) throw err;
+            drawCanvasFromData(doc.data);
         });
 
-        // Listen to drawing history from the server
-        socket.on('drawingHistory', (history) => {
-            history.forEach(data => drawOnCanvas(data, ctxRef.current));
+        doc.on('op', (op) => {
+            drawCanvasFromData(doc.data);
         });
 
         canvas.addEventListener('mousedown', startDrawing);
@@ -37,6 +44,16 @@ const Canvas = () => {
         };
     }, []);
 
+    // we save the entire canvas state as ImageData to the document
+    // this should be changed to send only the differential changes
+    const drawCanvasFromData = (data) => {
+        // Use the data from ShareDB's document to redraw the canvas. 
+        // For simplicity, the data can be an imageData object.
+        if (data && data.imageData) {
+            ctxRef.current.putImageData(data.imageData, 0, 0);
+        }
+    };
+
     let drawing = false;
 
     const startDrawing = (event) => {
@@ -47,6 +64,8 @@ const Canvas = () => {
     const stopDrawing = () => {
         drawing = false;
         ctxRef.current.beginPath();
+        const imageData = ctxRef.current.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+        doc.submitOp([{ p: ['imageData'], oi: imageData }]);
     };
 
     const draw = (event) => {
@@ -60,20 +79,6 @@ const Canvas = () => {
         ctxRef.current.stroke();
         ctxRef.current.beginPath();
         ctxRef.current.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
-    
-        let data = {
-            x: event.clientX - canvas.offsetLeft,
-            y: event.clientY - canvas.offsetTop
-        };
-    
-        socket.emit('draw', data);
-    };
-    
-    const drawOnCanvas = (data, ctx) => {
-        ctx.beginPath(); // Start a new path here
-        ctx.moveTo(data.x, data.y); // Move to the current position
-        ctx.lineTo(data.x, data.y);
-        ctx.stroke();
     };
 
     return <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight} />;
