@@ -9,7 +9,45 @@ data is updated?
 Differential, high-frequency updates
 
 Probably need to use Operational Transformation (OT)
-Consider using ShareDB which is specifically designed for OT https://github.com/share/sharedb
+Consider using ShareDB which is specifically designed for OT https://github.com/share/sharedb 
+
+Document Model with Versions: ShareDB maintains a versioned model of your document. Each time 
+a change (or operation) is made to the document, it's recorded with a version number. This 
+allows ShareDB to keep track of the sequence of changes over time.
+
+Operations: In OT, changes to a document are represented as operations. An operation might be 
+something like "insert the letter 'a' at position 5." Operations can be transformed against each 
+other, meaning they can be adjusted in response to other operations.
+
+Submission and Transformation: When a client wants to make a change, they send an operation to the 
+server. If no other changes have been made in the meantime, the operation is applied directly. 
+However, if other changes have been made (by other users, for instance), then the server will 
+transform the incoming operation against the changes that have already been applied. This 
+transformation ensures that the operation still makes "sense" even after the other changes.
+
+Acknowledgment and Broadcast: Once the server has applied an operation (whether it needed to be 
+transformed or not), it will acknowledge receipt to the sending client and broadcast the operation 
+to all other connected clients. This way, everyone's view of the document gets updated.
+
+Conflict Resolution: In cases where two operations conflict directly, ShareDB uses OT's transformation 
+capabilities to resolve the conflict in a way that's consistent and doesn't lose data. For example, 
+if two users try to insert text at the same position simultaneously, OT might adjust the position 
+of one of the inserts slightly so that both texts get added without overwriting each other.
+
+Backend Storage: ShareDB uses a database (like MongoDB) to store the document's state and operation 
+logs. This ensures that even if the server restarts, the document's history and current state are 
+preserved.
+
+Integration with JSON Documents: One of the strengths of ShareDB is its ability to work with JSON 
+documents. This means you can use OT on complex data structures, not just plain text. Operations 
+can target specific keys in the JSON, allowing for fine-grained collaborative editing of structured 
+data.
+
+Client Libraries: ShareDB provides client libraries that integrate seamlessly with popular frontend 
+frameworks. These libraries handle the communication with the server, applying operations to the 
+local document, and updating the UI in response to remote changes.
+
+
 
 To not run out of bandwidth consider: 
 * user cap
